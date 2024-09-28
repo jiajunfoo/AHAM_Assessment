@@ -1,24 +1,32 @@
 from flask import Flask, jsonify, request, abort
-from fund import InvestmentFund
+from fund import db, InvestmentFund  # Import the SQLAlchemy instance and model
 from datetime import datetime
 
 # Initialize Flask app
 app = Flask(__name__)
 
-# In-memory storage for funds
-funds = {}
+# Configure the SQLite database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///funds.db'  # The database URI
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # Disable modification tracking for performance
+
+# Initialize SQLAlchemy
+db.init_app(app)
+
+# Create the database and tables
+with app.app_context():
+    db.create_all()
+
 
 # Endpoint to retrieve a list of all funds
 @app.route('/funds', methods=['GET'])
 def get_funds():
-    return jsonify([fund.to_dict() for fund in funds.values()])
+    funds = InvestmentFund.query.all()
+    return jsonify([fund.to_dict() for fund in funds])
 
 # Endpoint to retrieve details of a specific fund using its ID
 @app.route('/funds/<int:fund_id>', methods=['GET'])
 def get_fund(fund_id):
-    fund = funds.get(fund_id)
-    if not fund:
-        abort(404, description='Fund not found')
+    fund = InvestmentFund.query.get_or_404(fund_id)
     return jsonify(fund.to_dict())
 
 # Endpoint to create a new fund
@@ -36,18 +44,11 @@ def create_fund():
     except ValueError:
         abort(400, description="Invalid 'nav' or 'performance' value. Must be a number.")
     
-    # Generate a new fund_id based on the current highest id
-    if funds:
-        fund_id = max(funds.keys()) + 1  # Auto-increment
-    else:
-        fund_id = 1  # First fund gets ID 1
-    
     # Default to the current date
     date_of_creation = new_data.get('date_of_creation', datetime.now().strftime('%Y-%m-%d'))
     
-    # Create a new InvestmentFund instance
+    # Create a new InvestmentFund instance (no need to manually assign 'fund_id')
     new_fund = InvestmentFund(
-        fund_id = fund_id,
         name = new_data['name'],
         manager_name = new_data['manager_name'],
         description = new_data['description'],
@@ -56,28 +57,28 @@ def create_fund():
         performance = performance
     )
     
-    # Add the new fund to the in-memory storage
-    funds[fund_id] = new_fund
+    # Add the new fund to the database
+    db.session.add(new_fund)
+    db.session.commit()
+
     return jsonify(new_fund.to_dict()), 201
 
 # Endpoint to update the performance of a fund using its ID
 @app.route('/funds/<int:fund_id>', methods=['PUT'])
 def update_fund_performance(fund_id):
-    data = request.json
-    fund = funds.get(fund_id)
+    fund = InvestmentFund.query.get_or_404(fund_id)
     
-    if not fund:
-        abort(404, description="Fund not found")
+    data = request.json
     
     if 'performance' not in data:
         abort(400, description="Missing performance field")
     
     try:
-        performance = float(data['performance'])
+        fund.performance = float(data['performance'])
     except ValueError:
         abort(400, description="Invalid 'performance' value. Must be a number.")
     
-    fund.update_performance(performance)
+    db.session.commit()
     return jsonify(fund.to_dict())
 
 
@@ -85,10 +86,11 @@ def update_fund_performance(fund_id):
 # Endpoint to delete a fund using its ID
 @app.route('/funds/<int:fund_id>', methods=['DELETE'])
 def delete_fund(fund_id):
-    if fund_id not in funds:
-        abort(404, description="Fund not found")
+    fund = InvestmentFund.query.get_or_404(fund_id)
         
-    del funds[fund_id]
+    db.session.delete(fund)
+    db.session.commit()
+    
     return jsonify({'message': 'Fund deleted successfully'}), 200
 
 
