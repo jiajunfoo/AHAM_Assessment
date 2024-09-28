@@ -1,3 +1,4 @@
+from collections import OrderedDict
 class InvestmentFund:
     def __init__(self, fund_id, name, manager_name, description, nav, date_of_creation, performance):
         """
@@ -36,15 +37,15 @@ class InvestmentFund:
         :return: A dictionary representation of the InvestmentFund instance. 
         """
         
-        return {
-            'fund_id': self.fund_id,
-            'name': self.name,
-            'manager_name': self.manager_name,
-            'description': self.description,
-            'nav': self.nav,
-            'date_of_creation': self.date_of_creation,
-            'performance': self.performance
-        }
+        return OrderedDict([
+            ('fund_id', self.fund_id),
+            ('name', self.name),
+            ('manager_name', self.manager_name),
+            ('description', self.description),
+            ('nav', self.nav),
+            ('date_of_creation', self.date_of_creation),
+            ('performance', self.performance)
+        ])
         
     
     def __repr__(self):
