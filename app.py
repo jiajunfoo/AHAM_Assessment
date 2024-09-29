@@ -15,19 +15,34 @@ db.init_app(app)
 # Create the database and tables
 with app.app_context():
     db.create_all()
+    
+# Custom error handler for 404 (Not Found)
+@app.errorhandler(404)
+def resource_not_found(error):
+    return jsonify({"error": "Resource not found"}), 404
+
+# Custom error handler for 400 (Bad Request)
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify({"error": "Bad request", "message": str(error.description)}), 400
+
+# Custom error handler for 500 (Internal Server Error)
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({"error": "Internal server error"}), 500
 
 
 # Endpoint to retrieve a list of all funds
 @app.route('/funds', methods=['GET'])
 def get_funds():
     funds = InvestmentFund.query.all()
-    return jsonify([fund.to_dict() for fund in funds])
+    return jsonify([fund.to_dict() for fund in funds]), 200
 
 # Endpoint to retrieve details of a specific fund using its ID
 @app.route('/funds/<int:fund_id>', methods=['GET'])
 def get_fund(fund_id):
-    fund = InvestmentFund.query.get_or_404(fund_id)
-    return jsonify(fund.to_dict())
+    fund = InvestmentFund.query.get_or_404(fund_id)  # Flask's built-in 404 handler
+    return jsonify(fund.to_dict()), 200
 
 # Endpoint to create a new fund
 @app.route('/funds', methods=['POST'])
@@ -35,14 +50,14 @@ def create_fund():
     new_data = request.json
     # Check if all required fields are present in the request
     if not all(k in new_data for k in ('name', 'manager_name', 'description', 'nav', 'performance')):
-        abort(400, description="Missing fields")
+        return jsonify({"error": "Missing required fields"}), 400
         
     # Validate that 'nav' and 'performance' are numbers
     try:
         nav = float(new_data['nav'])
         performance = float(new_data['performance'])
     except ValueError:
-        abort(400, description="Invalid 'nav' or 'performance' value. Must be a number.")
+        return jsonify({"error": "NAV and performance must be numbers"}), 400
     
     # Default to the current date
     date_of_creation = new_data.get('date_of_creation', datetime.now().strftime('%Y-%m-%d'))
@@ -71,16 +86,15 @@ def update_fund_performance(fund_id):
     data = request.json
     
     if 'performance' not in data:
-        abort(400, description="Missing performance field")
+        return jsonify({'message': 'Missing performance field'}), 400
     
     try:
         fund.performance = float(data['performance'])
     except ValueError:
-        abort(400, description="Invalid 'performance' value. Must be a number.")
+        return jsonify({'message': "Invalid 'performance' value. Must be a number."}), 400
     
     db.session.commit()
-    return jsonify(fund.to_dict())
-
+    return jsonify(fund.to_dict()), 200
 
 
 # Endpoint to delete a fund using its ID
